@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useMemo, useState } from 'react';
-import Sidebar, { MasterKey } from '../../components/Sidebar';
+import Sidebar, { MasterKey } from '../../../components/Sidebar';
 
 type MasterDefinition = {
 	key: MasterKey;
