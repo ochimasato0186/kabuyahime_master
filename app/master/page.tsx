@@ -148,7 +148,7 @@ export default function MasterPage() {
 		event.preventDefault();
 		const formData = new FormData(event.currentTarget);
 		const row = Object.fromEntries(activeDefinition.columns.slice(0, -1).map((column) => [column, formData.get(column) ?? ''])) as MasterRow;
-		row[activeDefinition.columns[0]] = formData.get(activeDefinition.columns[0]) ?? '';
+		row[activeDefinition.columns[0]] = String(formData.get(activeDefinition.columns[0]) ?? '');
 		row.is_active = editingRow?.is_active ?? 'true';
 		setRowsByKey((current) => ({ ...current, [activeKey]: editingRow ? current[activeKey].map((candidate) => candidate === editingRow ? row : candidate) : [...current[activeKey], row] }));
 		setModalOpen(false);
