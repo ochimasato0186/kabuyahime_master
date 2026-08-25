@@ -16,6 +16,10 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Firestore setup
+
+Copy `firebase-env.example` to `.env.local` and fill in the Firebase Web App configuration values. The Firestore collections are `characters`, `items`, `gachas`, `capsules`, and `gacha_contents`. Numeric ID fields and the `gachas.many` coin cost are defined in `lib/firestore.ts`.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
