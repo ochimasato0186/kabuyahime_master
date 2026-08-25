@@ -27,6 +27,7 @@ export default function Sidebar({ activePage, activeMaster, activeGachaCount = 0
 			<nav className="shared-primary-nav">
 				<Link className={`shared-nav-item ${activePage === 'home' ? 'active' : ''}`} href="/home"><span className="shared-nav-icon">⌂</span><span>ホーム</span></Link>
 				<Link className={`shared-nav-item ${activePage === 'master' ? 'active' : ''}`} href="/master"><span className="shared-nav-icon">◇</span><span>マスタ管理</span></Link>
+				<Link className="shared-nav-item" href="/settings"><span className="shared-nav-icon">⚙</span><span>Firebase設定</span></Link>
 			</nav>
 			<div className="shared-divider" />
 			<div className="shared-label">管理テーブル</div>
