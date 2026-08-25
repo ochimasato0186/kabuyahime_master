@@ -11,6 +11,8 @@ type MasterDefinition = {
 	rows: Record<string, string | number>[];
 };
 
+type MasterRow = Record<string, string | number>;
+
 const definitions: MasterDefinition[] = [
 	{
 		key: 'characters',
@@ -96,24 +98,61 @@ function displayColumn(column: string) {
 	return columnLabels[column] ?? column.replaceAll('_', ' ');
 }
 
+function inputValue(column: string, value: string | number | undefined) {
+	if (value === undefined) return '';
+	if (column.endsWith('_at')) return String(value).replace('/', '-').replace('/', '-').replace(' ', 'T');
+	return String(value);
+}
+
 export default function MasterPage() {
 	const [activeKey, setActiveKey] = useState<MasterKey>('gachas');
 	const [sidebarOpen, setSidebarOpen] = useState(false);
 	const [query, setQuery] = useState('');
 	const [modalOpen, setModalOpen] = useState(false);
+	const [editingRow, setEditingRow] = useState<MasterRow | null>(null);
+	const [actionRow, setActionRow] = useState<MasterRow | null>(null);
+	const [rowsByKey, setRowsByKey] = useState<Record<MasterKey, MasterRow[]>>(() => Object.fromEntries(definitions.map((definition) => [definition.key, definition.rows])) as Record<MasterKey, MasterRow[]>);
 	const [saved, setSaved] = useState(false);
 	const activeDefinition = definitions.find((definition) => definition.key === activeKey) ?? definitions[0];
-	const filteredRows = useMemo(() => activeDefinition.rows.filter((row) => Object.values(row).some((value) => String(value).toLowerCase().includes(query.toLowerCase()))), [activeDefinition, query]);
+	const activeRows = rowsByKey[activeKey];
+	const filteredRows = useMemo(() => activeRows.filter((row) => Object.values(row).some((value) => String(value).toLowerCase().includes(query.toLowerCase()))), [activeRows, query]);
 
 	function selectMaster(key: MasterKey) {
 		setActiveKey(key);
 		setQuery('');
+		setActionRow(null);
 		setSidebarOpen(false);
+	}
+
+	function openCreateModal() {
+		setEditingRow(null);
+		setModalOpen(true);
+	}
+
+	function openEditModal(row: MasterRow) {
+		setActionRow(null);
+		setEditingRow(row);
+		setModalOpen(true);
+	}
+
+	function deleteRow(row: MasterRow) {
+		setActionRow(null);
+		const id = String(row[activeDefinition.columns[0]]);
+		if (!window.confirm(`${activeDefinition.label}「${id}」を削除しますか？`)) return;
+		setRowsByKey((current) => ({ ...current, [activeKey]: current[activeKey].filter((candidate) => String(candidate[activeDefinition.columns[0]]) !== id) }));
+		setSaved(true);
+		window.setTimeout(() => setSaved(false), 2400);
 	}
 
 	function submitForm(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
+		const formData = new FormData(event.currentTarget);
+		const row = Object.fromEntries(activeDefinition.columns.slice(0, -1).map((column) => [column, formData.get(column) ?? ''])) as MasterRow;
+		row[activeDefinition.columns[0]] = formData.get(activeDefinition.columns[0]) ?? '';
+		row.is_active = editingRow?.is_active ?? 'true';
+		setRowsByKey((current) => ({ ...current, [activeKey]: editingRow ? current[activeKey].map((candidate) => candidate === editingRow ? row : candidate) : [...current[activeKey], row] }));
 		setModalOpen(false);
+		setEditingRow(null);
 		setSaved(true);
 		window.setTimeout(() => setSaved(false), 2400);
 	}
@@ -131,14 +170,14 @@ export default function MasterPage() {
 				<Sidebar activePage="master" activeMaster={activeKey} onMasterSelect={selectMaster} />
 				<section className="content">
 					<div className="breadcrumb">MASTER DATA <span>/</span> ガチャマスタ</div>
-					<div className="content-header"><div><p className="eyebrow">MASTER MANAGEMENT</p><h1>ガチャマスタ</h1><p className="muted">ガチャに関連する5つのマスターデータを一元管理します。</p></div><button className="primary-button" onClick={() => setModalOpen(true)}><span>＋</span> {activeDefinition.label}を追加</button></div>
-					<div className="master-tabs" role="tablist">{definitions.map((definition) => <button className={`master-tab ${activeKey === definition.key ? 'selected' : ''}`} role="tab" aria-selected={activeKey === definition.key} onClick={() => selectMaster(definition.key)} key={definition.key}><strong>{definition.label}</strong><span>{definition.rows.length.toString().padStart(2, '0')} records</span></button>)}</div>
+					<div className="content-header"><div><p className="eyebrow">MASTER MANAGEMENT</p><h1>ガチャマスタ</h1><p className="muted">ガチャに関連する5つのマスターデータを一元管理します。</p></div><button className="primary-button" onClick={openCreateModal}><span>＋</span> {activeDefinition.label}を追加</button></div>
+					<div className="master-tabs" role="tablist">{definitions.map((definition) => <button className={`master-tab ${activeKey === definition.key ? 'selected' : ''}`} role="tab" aria-selected={activeKey === definition.key} onClick={() => selectMaster(definition.key)} key={definition.key}><strong>{definition.label}</strong><span>{rowsByKey[definition.key].length.toString().padStart(2, '0')} records</span></button>)}</div>
 					<div className="section-heading"><div><span className="panel-kicker">{activeDefinition.key.toUpperCase()}</span><h2>{activeDefinition.label}</h2><p>{activeDefinition.description}</p></div><div className="table-tools"><label className="table-search"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="レコードを検索" aria-label="レコードを検索" /></label><button className="filter-button" aria-label="フィルター">☷</button></div></div>
-					<div className="table-panel"><table><thead><tr>{activeDefinition.columns.map((column) => <th key={column}>{displayColumn(column)}<span>↕</span></th>)}<th aria-label="操作" /></tr></thead><tbody>{filteredRows.map((row) => <tr key={String(row[activeDefinition.columns[0]])}>{activeDefinition.columns.map((column) => <td key={column}>{column === 'is_active' ? <button className={`status ${row[column] === 'true' ? 'on' : 'off'}`} onClick={() => undefined}><span />{row[column] === 'true' ? '有効' : '停止中'}</button> : column === 'drop_rate' ? <strong className="rate">{row[column]}</strong> : <span className={column.endsWith('_id') ? 'code' : ''}>{row[column]}</span>}</td>)}<td><button className="row-action" aria-label={`${row[activeDefinition.columns[0]]}を編集`} onClick={() => setModalOpen(true)}>•••</button></td></tr>)}</tbody></table>{filteredRows.length === 0 && <div className="empty-state">一致するレコードがありません</div>}<div className="table-footer"><span>{filteredRows.length}件を表示 / 全{activeDefinition.rows.length}件</span><span>最終更新: 2026/08/25 15:30</span></div></div>
+					<div className="table-panel"><table><thead><tr>{activeDefinition.columns.map((column) => <th key={column}>{displayColumn(column)}<span>↕</span></th>)}<th aria-label="操作" /></tr></thead><tbody>{filteredRows.map((row, rowIndex) => <tr key={String(row[activeDefinition.columns[0]])}>{activeDefinition.columns.map((column) => <td key={column}>{column === 'is_active' ? <button className={`status ${row[column] === 'true' ? 'on' : 'off'}`} onClick={() => undefined}><span />{row[column] === 'true' ? '有効' : '停止中'}</button> : column === 'drop_rate' ? <strong className="rate">{row[column]}</strong> : <span className={column.endsWith('_id') ? 'code' : ''}>{row[column]}</span>}</td>)}<td className="row-actions"><div className="action-menu"><button type="button" className="action-menu-trigger" aria-label={`${row[activeDefinition.columns[0]]}の操作`} aria-expanded={actionRow === row} onClick={() => setActionRow(actionRow === row ? null : row)}><span /><span /><span /></button>{actionRow === row && <div className={`action-menu-list ${rowIndex === filteredRows.length - 1 ? 'above' : ''}`}><button type="button" onClick={() => openEditModal(row)}><span aria-hidden="true">✎</span>編集</button><button type="button" className="danger" onClick={() => deleteRow(row)}><span aria-hidden="true">×</span>削除</button></div>}</div></td></tr>)}</tbody></table>{filteredRows.length === 0 && <div className="empty-state">一致するレコードがありません</div>}<div className="table-footer"><span>{filteredRows.length}件を表示 / 全{activeRows.length}件</span><span>最終更新: 2026/08/25 15:30</span></div></div>
 					{saved && <div className="toast"><span>✓</span>変更を保存しました</div>}
 				</section>
 			</div>
-			{modalOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setModalOpen(false)}><form className="modal" onSubmit={submitForm} onMouseDown={(event) => event.stopPropagation()}><div className="modal-heading"><div><span className="panel-kicker">NEW RECORD</span><h2>{activeDefinition.label}を追加</h2></div><button type="button" className="close-button" aria-label="閉じる" onClick={() => setModalOpen(false)}>×</button></div><div className="form-grid">{activeDefinition.columns.slice(0, 4).map((column) => <label key={column}>{displayColumn(column)}<input required={column.endsWith('_id') || column.endsWith('_name')} placeholder={`${displayColumn(column)}を入力`} /></label>)}</div><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setModalOpen(false)}>キャンセル</button><button className="primary-button" type="submit">保存する</button></div></form></div>}
+			{modalOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setModalOpen(false)}><form className="modal" onSubmit={submitForm} onMouseDown={(event) => event.stopPropagation()}><div className="modal-heading"><div><span className="panel-kicker">{editingRow ? (activeKey === 'gachas' ? 'RESERVATION EDIT' : 'EDIT RECORD') : 'NEW RECORD'}</span><h2>{editingRow ? `${activeDefinition.label}を編集` : `${activeDefinition.label}を追加`}</h2></div><button type="button" className="close-button" aria-label="閉じる" onClick={() => setModalOpen(false)}>×</button></div><div className="form-grid">{activeDefinition.columns.slice(0, -1).map((column) => <label key={column}>{displayColumn(column)}<input name={column} defaultValue={inputValue(column, editingRow?.[column])} required={column.endsWith('_id') || column.endsWith('_name')} type={column.endsWith('_at') ? 'datetime-local' : column === 'many' || column.endsWith('_id') || column === 'quantity' ? 'number' : 'text'} placeholder={`${displayColumn(column)}を入力`} /></label>)}</div><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setModalOpen(false)}>キャンセル</button><button className="primary-button" type="submit">{editingRow ? '変更を保存' : '保存する'}</button></div></form></div>}
 			<style jsx>{`
 	:global(*) { box-sizing: border-box; }
 	:global(body) { margin: 0; background: #f4f6f5; color: #18252b; font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif; }
@@ -150,6 +189,18 @@ export default function MasterPage() {
 	@media (max-width: 900px) { .topbar { padding: 0 20px; gap: 20px; }.menu-button { display: flex; flex-direction: column; gap: 5px; padding: 5px 0; }.menu-button span { width: 20px; height: 2px; background: #56716c; }.top-context { padding-left: 15px; }.sidebar { position: fixed; z-index: 4; top: 76px; bottom: 0; left: 0; transform: translateX(-100%); transition: transform .2s ease; box-shadow: 10px 0 30px #183b3820; }.sidebar-visible .sidebar { transform: translateX(0); }.sidebar-visible .sidebar-backdrop { display: block; position: fixed; inset: 76px 0 0; z-index: 3; border: 0; background: #183b3840; }.content { padding: 30px 20px 55px; }.master-tabs { grid-template-columns: repeat(3, 1fr); }.section-heading { align-items: flex-start; gap: 18px; flex-direction: column; }.table-tools { width: 100%; }.table-search { flex: 1; } }
 	@media (max-width: 520px) { .user-name, .chevron, .top-context { display: none; }.content-header { align-items: flex-start; flex-direction: column; gap: 18px; }.content-header .primary-button { align-self: stretch; }.master-tabs { grid-template-columns: repeat(2, 1fr); }.master-tab { min-height: 68px; }.form-grid { grid-template-columns: 1fr; }.table-footer { gap: 8px; flex-direction: column; } }
 `}</style>
+			<style jsx>{`
+				.action-menu { position: relative; display: inline-block; }
+				.action-menu-trigger { width: 32px; height: 32px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 0; border: 1px solid #dce6e2; border-radius: 4px; background: #fff; color: #55716a; cursor: pointer; }
+				.action-menu-trigger:hover, .action-menu-trigger[aria-expanded='true'] { color: #176a61; border-color: #75b3a5; background: #eef7f3; }
+				.action-menu-trigger span { display: block; width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
+				.action-menu-list { position: absolute; top: calc(100% + 6px); right: 0; z-index: 3; min-width: 116px; padding: 5px; background: #fff; border: 1px solid #dce6e2; box-shadow: 0 8px 20px #31584b20; }
+				.action-menu-list.above { top: auto; bottom: calc(100% + 6px); }
+				.action-menu-list button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 10px; border: 0; background: transparent; color: #526b65; font: 12px inherit; text-align: left; cursor: pointer; }
+				.action-menu-list button:hover { background: #eef7f3; color: #176a61; }
+				.action-menu-list button.danger { color: #b7664c; }
+				.action-menu-list button.danger:hover { background: #fff1ec; color: #a64c35; }
+			`}</style>
 		</main>
 	);
 }
